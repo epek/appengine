@@ -127,6 +127,10 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 		}
 	}
 
+
+	if e, ok := v.(BasicFieldLoadSaver); ok {
+		return e.Load(pValue)
+	}
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 		x, ok := pValue.(int64)
@@ -221,9 +225,6 @@ func loadEntity(dst interface{}, src *pb.EntityProto) (err error) {
 		return err
 	}
 	if e, ok := dst.(PropertyLoadSaver); ok {
-		return e.Load(props)
-	}
-	if e, ok := dst.(BasicFieldLoadSaver); ok {
 		return e.Load(props)
 	}
 	return LoadStruct(dst, props)

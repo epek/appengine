@@ -127,7 +127,7 @@ func saveEntity(defaultAppID string, key *Key, src interface{}) (*pb.EntityProto
 }
 
 type BasicFieldLoadSaver interface{
-	Load([]Property)error
+	Load(interface{})error
 	Save(p *Property)(error)
 }
 
