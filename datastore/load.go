@@ -128,8 +128,15 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 	}
 
 
-	if e, ok := v.(BasicFieldLoadSaver); ok {
-		return e.Load(pValue)
+	if e, ok := v.Addr().Interface().(BasicFieldLoadSaver); ok {
+		if err := e.Load(pValue); err != nil{
+			panic(err)
+			return err.Error()
+		}
+		if slice.IsValid() {
+			slice.Set(reflect.Append(slice, v))
+		}
+		return ""
 	}
 	switch v.Kind() {
 	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
