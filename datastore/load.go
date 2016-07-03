@@ -223,6 +223,9 @@ func loadEntity(dst interface{}, src *pb.EntityProto) (err error) {
 	if e, ok := dst.(PropertyLoadSaver); ok {
 		return e.Load(props)
 	}
+	if e, ok := dst.(BasicFieldLoadSaver); ok {
+		return e.Load(props)
+	}
 	return LoadStruct(dst, props)
 }
 

@@ -126,11 +126,23 @@ func saveEntity(defaultAppID string, key *Key, src interface{}) (*pb.EntityProto
 	return propertiesToProto(defaultAppID, key, props)
 }
 
+type BasicFieldLoadSaver interface{
+	Load([]Property)error
+	Save(p *Property)(error)
+}
+
 func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, v reflect.Value) error {
 	p := Property{
 		Name:     name,
 		NoIndex:  noIndex,
 		Multiple: multiple,
+	}
+	if e, ok := v.Interface().(BasicFieldLoadSaver); ok{
+		if err := e.Save(&p); err != nil{
+			return err
+		}
+		*props = append(*props, p)
+		return nil
 	}
 	switch x := v.Interface().(type) {
 	case *Key:
