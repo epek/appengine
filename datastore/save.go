@@ -128,7 +128,7 @@ func saveEntity(defaultAppID string, key *Key, src interface{}) (*pb.EntityProto
 
 type BasicFieldLoadSaver interface{
 	Load(interface{})error
-	Save(*Property)error
+	Save()(interface{}, error)
 }
 
 
@@ -139,7 +139,8 @@ func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, 
 		Multiple: multiple,
 	}
 	if e, ok := v.Addr().Interface().(BasicFieldLoadSaver); ok{
-		if err := e.Save(&p); err != nil{
+		var err error
+		if p.Value, err = e.Save(); err != nil{
 			return err
 		}
 		*props = append(*props, p)
