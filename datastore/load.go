@@ -59,6 +59,7 @@ type propertyLoader struct {
 func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p Property, requireSlice bool) string {
 	var v reflect.Value
 	// Traverse a struct's struct-typed fields.
+outer:
 	for name := p.Name; ; {
 		decoder, ok := codec.byName[name]
 		if !ok {
@@ -71,12 +72,29 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 		if !v.CanSet() {
 			return "cannot set struct field"
 		}
-
-		if decoder.substructCodec == nil {
-			break
+		if v.Kind() == reflect.Ptr {
+			v.Set(reflect.New(v.Type().Elem()))
 		}
-
-		if v.Kind() == reflect.Slice {
+		switch {
+		case decoder.substructCodec == nil:
+			break outer
+		default:
+			structValue = v
+		case isBasicLoadSaver(v):
+			structValue = v
+		case v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Slice:
+			if l.m == nil {
+				l.m = make(map[string]int)
+			}
+			index := l.m[p.Name]
+			l.m[p.Name] = index + 1
+			for v.Elem().Len() <= index {
+				v.Elem().Set(reflect.Append(v.Elem(),
+					reflect.New(v.Elem().Type().Elem()).Elem()))
+			}
+			structValue = v.Index(index)
+			requireSlice = false
+		case v.Kind() == reflect.Slice:
 			if l.m == nil {
 				l.m = make(map[string]int)
 			}
@@ -87,8 +105,6 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 			}
 			structValue = v.Index(index)
 			requireSlice = false
-		} else {
-			structValue = v
 		}
 		// Strip the "I." from "I.X".
 		name = name[len(codec.byIndex[decoder.index].name):]
@@ -96,13 +112,18 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 	}
 
 	var slice reflect.Value
-	if v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint8 {
+	switch {
+	case isBasicLoadSaver(v):
+	case v.Kind() == reflect.Slice && v.Type().Elem().Kind() != reflect.Uint8:
 		slice = v
 		v = reflect.New(v.Type().Elem()).Elem()
-	} else if requireSlice {
+	case v.Kind() == reflect.Ptr && v.Elem().Kind() == reflect.Slice &&
+		v.Type().Elem().Elem().Kind() != reflect.Uint8:
+		slice = v
+		v = reflect.New(v.Type().Elem().Elem()).Elem()
+	case requireSlice:
 		return "multiple-valued property requires a slice field type"
 	}
-
 	// Convert indexValues to a Go value with a meaning derived from the
 	// destination type.
 	pValue := p.Value
@@ -126,13 +147,11 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 			return err.Error()
 		}
 	}
-
-
-	if e, ok := v.Addr().Interface().(BasicFieldLoadSaver); ok {
-		if err := e.Load(pValue); err != nil{
-			panic(err)
-			return err.Error()
-		}
+	ok, err := loadBasicLoader(v, slice, pValue)
+	if err != nil {
+		return err.Error()
+	}
+	if ok {
 		if slice.IsValid() {
 			slice.Set(reflect.Append(slice, v))
 		}
@@ -223,6 +242,34 @@ func (l *propertyLoader) load(codec *structCodec, structValue reflect.Value, p P
 		slice.Set(reflect.Append(slice, v))
 	}
 	return ""
+}
+
+func isBasicLoadSaver(v reflect.Value) bool {
+	if v.Kind() != reflect.Ptr {
+		_, ok := v.Addr().Interface().(BasicFieldLoadSaver)
+		return ok
+	}
+	_, ok := v.Interface().(BasicFieldLoadSaver)
+	return ok
+}
+
+func loadBasicLoader(v, slice reflect.Value, pValue interface{}) (bool, error) {
+	if v.Kind() != reflect.Ptr {
+		if e, ok := v.Addr().Interface().(BasicFieldLoadSaver); ok {
+			if err := e.Load(pValue); err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+		return false, nil
+	}
+	if e, ok := v.Interface().(BasicFieldLoadSaver); ok {
+		if err := e.Load(pValue); err != nil {
+			return false, err
+		}
+		return true, nil
+	}
+	return false, nil
 }
 
 // loadEntity loads an EntityProto into PropertyLoadSaver or struct pointer.

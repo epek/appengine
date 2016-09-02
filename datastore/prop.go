@@ -166,6 +166,9 @@ func getStructCodec(t reflect.Type) (*structCodec, error) {
 // getStructCodecLocked implements getStructCodec. The structCodecsMutex must
 // be held when calling this function.
 func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
 	c, ok := structCodecs[t]
 	if ok {
 		return c, nil
@@ -187,6 +190,9 @@ func getStructCodecLocked(t reflect.Type) (ret *structCodec, retErr error) {
 
 	for i := range c.byIndex {
 		f := t.Field(i)
+		if f.Type.Kind() == reflect.Ptr {
+			f.Type = f.Type.Elem()
+		}
 		name, opts := f.Tag.Get("datastore"), ""
 		if i := strings.Index(name, ","); i != -1 {
 			name, opts = name[:i], name[i+1:]

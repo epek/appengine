@@ -126,11 +126,10 @@ func saveEntity(defaultAppID string, key *Key, src interface{}) (*pb.EntityProto
 	return propertiesToProto(defaultAppID, key, props)
 }
 
-type BasicFieldLoadSaver interface{
-	Load(interface{})error
-	Save()(interface{}, error)
+type BasicFieldLoadSaver interface {
+	Load(interface{}) error
+	Save() (interface{}, error)
 }
-
 
 func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, v reflect.Value) error {
 	p := Property{
@@ -138,14 +137,26 @@ func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, 
 		NoIndex:  noIndex,
 		Multiple: multiple,
 	}
-	if e, ok := v.Addr().Interface().(BasicFieldLoadSaver); ok{
-		var err error
-		if p.Value, err = e.Save(); err != nil{
-			return err
+	if v.Kind() != reflect.Ptr {
+		if e, ok := v.Addr().Interface().(BasicFieldLoadSaver); ok {
+			var err error
+			if p.Value, err = e.Save(); err != nil {
+				return err
+			}
+			*props = append(*props, p)
+			return nil
 		}
-		*props = append(*props, p)
-		return nil
+	} else {
+		if e, ok := v.Interface().(BasicFieldLoadSaver); ok {
+			var err error
+			if p.Value, err = e.Save(); err != nil {
+				return err
+			}
+			*props = append(*props, p)
+			return nil
+		}
 	}
+
 	switch x := v.Interface().(type) {
 	case *Key:
 		p.Value = x
@@ -158,6 +169,13 @@ func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, 
 	case ByteString:
 		p.Value = x
 	default:
+		if v.Kind() == reflect.Ptr {
+			if v.IsNil() {
+				v = reflect.New(v.Type().Elem()).Elem()
+			} else {
+				v = v.Elem()
+			}
+		}
 		switch v.Kind() {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			p.Value = v.Int()
@@ -185,6 +203,8 @@ func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, 
 	}
 	if p.Value == nil {
 		return fmt.Errorf("datastore: unsupported struct field type: %v", v.Type())
+		//omitempty
+		//return nil // What about unsuported
 	}
 	*props = append(*props, p)
 	return nil
@@ -209,6 +229,7 @@ func (s structPLS) save(props *[]Property, prefix string, noIndex, multiple bool
 		}
 		v := s.v.Field(i)
 		if !v.IsValid() || !v.CanSet() {
+			panic(s.v.Field(i))
 			continue
 		}
 		noIndex1 := noIndex || t.noIndex
