@@ -65,7 +65,11 @@ outer:
 		if !ok {
 			return "no such struct field"
 		}
-		v = structValue.Field(decoder.index)
+		if structValue.Kind() == reflect.Ptr {
+			v = structValue.Elem().Field(decoder.index)
+		} else {
+			v = structValue.Field(decoder.index)
+		}
 		if !v.IsValid() {
 			return "no such struct field"
 		}

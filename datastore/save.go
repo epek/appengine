@@ -203,8 +203,6 @@ func saveStructProperty(props *[]Property, name string, noIndex, multiple bool, 
 	}
 	if p.Value == nil {
 		return fmt.Errorf("datastore: unsupported struct field type: %v", v.Type())
-		//omitempty
-		//return nil // What about unsuported
 	}
 	*props = append(*props, p)
 	return nil
@@ -229,7 +227,6 @@ func (s structPLS) save(props *[]Property, prefix string, noIndex, multiple bool
 		}
 		v := s.v.Field(i)
 		if !v.IsValid() || !v.CanSet() {
-			panic(s.v.Field(i))
 			continue
 		}
 		noIndex1 := noIndex || t.noIndex
